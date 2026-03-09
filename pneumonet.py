@@ -1,7 +1,6 @@
 import streamlit as st
 import google.generativeai as genai
 from PIL import Image
-import os
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
@@ -60,52 +59,74 @@ with col2:
             st.error("API Key is required to run the analysis.")
         else:
             if st.button("Run PneumoNet Analysis", type="primary"):
-                with st.spinner("Initializing Attention-Based DenseNet Simulation..."):
-                    try:
-                        # Choose the vision-capable model
-                        model = genai.GenerativeModel('gemini-1.5-flash')
-                        
-                        # THE HARD-PROMPT: Forcing Gemini to act as the Attention Mechanisms
-                        pneumonet_prompt = """
-                        You are 'PneumoNet', an advanced hybrid deep learning model combining a DenseNet backbone with integrated Channel and Spatial Attention Mechanisms, developed by Keerthik Roshan G. 
-                        Your purpose is high-accuracy pneumonia classification from Chest X-Rays (CXRs).
+                with st.spinner("Initializing Attention-Based DenseNet Simulation & Finding Available Model..."):
+                    
+                    # THE HARD-PROMPT: Forcing Gemini to act as the Attention Mechanisms
+                    pneumonet_prompt = """
+                    You are 'PneumoNet', an advanced hybrid deep learning model combining a DenseNet backbone with integrated Channel and Spatial Attention Mechanisms, developed by Keerthik Roshan G. 
+                    Your purpose is high-accuracy pneumonia classification from Chest X-Rays (CXRs).
 
-                        Analyze the provided Chest X-Ray image. You MUST structure your analysis by explicitly simulating your two attention modules. 
-                        Do not output a standard AI response. Output a clinical and architectural breakdown.
+                    Analyze the provided Chest X-Ray image. You MUST structure your analysis by explicitly simulating your two attention modules. 
+                    Do not output a standard AI response. Output a clinical and architectural breakdown.
 
-                        Follow this strict structure:
+                    Follow this strict structure:
 
-                        ### 1. Channel Attention Analysis
-                        *Focuses on specific features across the image.*
-                        * **Amplification:** Explicitly detail the specific textures you are amplifying that indicate pneumonia (e.g., hazy opacities, ground-glass infiltrates, consolidation).
-                        * **Suppression:** Explicitly describe the anatomical noise and distracting elements you are filtering out (e.g., ribs, clavicles, spine, heart shadow, background air, hospital tags).
+                    ### 1. Channel Attention Analysis
+                    *Focuses on specific features across the image.*
+                    * **Amplification:** Explicitly detail the specific textures you are amplifying that indicate pneumonia (e.g., hazy opacities, ground-glass infiltrates, consolidation).
+                    * **Suppression:** Explicitly describe the anatomical noise and distracting elements you are filtering out (e.g., ribs, clavicles, spine, heart shadow, background air, hospital tags).
 
-                        ### 2. Spatial Attention Analysis
-                        *Concentrates on specific locations within the image.*
-                        * **Targeted Focus:** Describe the exact spatial "mask" you are generating. Which specific lung fields (Upper, Middle, Lower lobes; Right vs Left lung) are receiving the highest "Importance Scores"?
-                        * **Distraction Ignorance:** Which spatial zones are assigned low importance?
+                    ### 2. Spatial Attention Analysis
+                    *Concentrates on specific locations within the image.*
+                    * **Targeted Focus:** Describe the exact spatial "mask" you are generating. Which specific lung fields (Upper, Middle, Lower lobes; Right vs Left lung) are receiving the highest "Importance Scores"?
+                    * **Distraction Ignorance:** Which spatial zones are assigned low importance?
 
-                        ### 3. Final Classification & Confidence
-                        *Based on the aggregated features from the DenseNet layers.*
-                        * **Diagnosis:** [NORMAL or PNEUMONIA]
-                        * **Confidence Score:** [Assign a high probability percentage, keeping in mind PneumoNet's baseline accuracy of 94.2% and recall of 93.5%]
-                        
-                        ### 4. Comprehensive Diagnostic Report
-                        Provide a final, readable summary of the findings translating your attention-based feature extraction into clinical radiologist terminology. Mention if there are visual patterns that might overlap with COVID-19 (as per future scope).
-                        """
+                    ### 3. Final Classification & Confidence
+                    *Based on the aggregated features from the DenseNet layers.*
+                    * **Diagnosis:** [NORMAL or PNEUMONIA]
+                    * **Confidence Score:** [Assign a high probability percentage, keeping in mind PneumoNet's baseline accuracy of 94.2% and recall of 93.5%]
+                    
+                    ### 4. Comprehensive Diagnostic Report
+                    Provide a final, readable summary of the findings translating your attention-based feature extraction into clinical radiologist terminology. Mention if there are visual patterns that might overlap with COVID-19 (as per future scope).
+                    """
 
-                        # Call the API
-                        response = model.generate_content([pneumonet_prompt, image])
-                        
-                        # Display results
-                        st.success("Analysis Complete!")
-                        
-                        # Parse and display the markdown output elegantly
-                        st.markdown(response.text)
-                        
-                        st.caption("Note: This report is generated by an AI simulating the PneumoNet architecture via the Gemini API. It is for demonstration and research purposes, not official clinical diagnosis.")
+                    # HIERARCHY OF MODELS: From highest capability down to standard legacy models
+                    models_to_try = [
+                        "gemini-1.5-pro-latest",   # Best reasoning, highest capability
+                        "gemini-1.5-pro",          # Standard 1.5 Pro
+                        "gemini-1.5-flash-latest", # Fastest, highly capable
+                        "gemini-1.5-flash",        # Standard 1.5 Flash
+                        "gemini-pro-vision"        # Legacy Vision Model (Ultimate Fallback)
+                    ]
 
-                    except Exception as e:
-                        st.error(f"An error occurred during analysis: {e}")
+                    success = False
+                    last_error = None
+
+                    # Iterate through the models until one works
+                    for model_name in models_to_try:
+                        try:
+                            # Attempt to initialize and generate with the current model in the loop
+                            model = genai.GenerativeModel(model_name)
+                            response = model.generate_content([pneumonet_prompt, image])
+                            
+                            # If we reach here, it worked! 
+                            st.success(f"Analysis Complete! (Powered by {model_name})")
+                            st.markdown(response.text)
+                            st.caption("Note: This report is generated by an AI simulating the PneumoNet architecture via the Gemini API. It is for demonstration and research purposes, not official clinical diagnosis.")
+                            
+                            success = True
+                            break # Break out of the loop since we succeeded
+
+                        except Exception as e:
+                            # Log the error internally and move to the next model
+                            last_error = str(e)
+                            st.toast(f"Model {model_name} unavailable. Trying next...", icon="🔄")
+                            continue
+
+                    # If all models in the list failed
+                    if not success:
+                        st.error("All vision models failed to process the request.")
+                        st.error(f"Last Error Encountered: {last_error}")
+                        st.info("Tip: Check if your API Key has access to the Gemini Vision API in Google AI Studio, or if there are geographic restrictions.")
     else:
         st.info("Awaiting image upload to begin feature extraction...")
