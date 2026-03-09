@@ -90,19 +90,43 @@ with col2:
                     Provide a final, readable summary of the findings translating your attention-based feature extraction into clinical radiologist terminology. Mention if there are visual patterns that might overlap with COVID-19 (as per future scope).
                     """
 
-                    # HIERARCHY OF MODELS: From highest capability down to standard legacy models
-                    models_to_try = [
-                        "gemini-1.5-pro-latest",   # Best reasoning, highest capability
-                        "gemini-1.5-pro",          # Standard 1.5 Pro
-                        "gemini-1.5-flash-latest", # Fastest, highly capable
-                        "gemini-1.5-flash",        # Standard 1.5 Flash
-                        "gemini-pro-vision"        # Legacy Vision Model (Ultimate Fallback)
+                    # DYNAMIC MODEL DISCOVERY: Ask the API what models this specific key has access to
+                    available_models = []
+                    try:
+                        for m in genai.list_models():
+                            if 'generateContent' in m.supported_generation_methods:
+                                # Strip 'models/' prefix to normalize names
+                                available_models.append(m.name.replace("models/", ""))
+                    except Exception as e:
+                        st.warning(f"Could not fetch available models from Google: {e}")
+
+                    # HIERARCHY OF MODELS: Ideal preference from newest/smartest to fastest/oldest
+                    ideal_hierarchy = [
+                        "gemini-2.5-pro",
+                        "gemini-2.5-flash",
+                        "gemini-2.0-pro-exp",
+                        "gemini-2.0-flash",
+                        "gemini-1.5-pro-latest",   
+                        "gemini-1.5-pro",          
+                        "gemini-1.5-flash-latest", 
+                        "gemini-1.5-flash"
                     ]
+
+                    # Filter ideal list to ONLY include models your API key actually supports
+                    models_to_try = [m for m in ideal_hierarchy if m in available_models]
+
+                    # If the filtered list is empty, fallback to ANY model the API reported that looks like a vision/multimodal model
+                    if not models_to_try:
+                        models_to_try = [m for m in available_models if "vision" in m or "1.5" in m or "2." in m]
+
+                    # Absolute failsafe list
+                    if not models_to_try:
+                        models_to_try = ["gemini-1.5-flash", "gemini-1.5-pro"]
 
                     success = False
                     last_error = None
 
-                    # Iterate through the models until one works
+                    # Iterate through the verified available models until one works
                     for model_name in models_to_try:
                         try:
                             # Attempt to initialize and generate with the current model in the loop
